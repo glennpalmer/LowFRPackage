@@ -46,7 +46,7 @@ fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
 
   # fit model
   options(mc.cores = parallel::detectCores())
-  fit <- sampling(m,
+  fit <- sampling(stanmodels$LowFR,
                   list(N=n_obs,
                        p=p,
                        k=k,
