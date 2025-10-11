@@ -42,7 +42,7 @@ fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
   }
 
   # compile stan model
-  m <- stan_model("Stan/LowFR.stan")
+  # m <- stan_model("Stan/LowFR.stan")
 
   # fit model
   options(mc.cores = parallel::detectCores())
