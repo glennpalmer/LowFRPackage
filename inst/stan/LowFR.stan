@@ -34,14 +34,16 @@ data {
   int<lower=0> N;
   int<lower=0> p;
   int<lower=0> k;
+  int<lower=0> q;
   int<lower=0> TT;
   int<lower=0> H;
-  vector[N] y;
-  matrix[N, p*TT] X;
+  vector[N] y; // outcome
+  matrix[N, p*TT] X; // observed longitudinal exposures
+  matrix[N, q] Z; // other covariates
 }
 
 parameters {
-  // parameters for regressoion of y on latent factors
+  // parameters for regression of y on latent factors and covariates
   // intercept
   real mu;
   // main effects
@@ -50,6 +52,8 @@ parameters {
   // interactions
   matrix[k,k] B;
   matrix[TT,TT] W;
+  // covariate effects
+  vector[q] zeta;
   // variance
   real<lower=0> sigma2;
 
@@ -128,6 +132,9 @@ model {
   // intercept
   mu ~ normal(0, sqrt(10));
 
+  // priors for covariate effects
+  zeta ~ normal(0, sqrt(10));
+
   // beta and omega multiplicative gamma priors
   for (j in 1:k) {
     for (l in 1:H) {
@@ -186,7 +193,7 @@ model {
   for (i in 1:N) {
     X[i,] ~ multi_normal(Lambda_kron_I * to_vector(Eta[i,]), Sigma_kron_phi);
 
-    y[i] ~ normal(mu + Eta[i] * theta + quad_form(Omega, Eta[i,]'), sqrt(sigma2));
+    y[i] ~ normal(mu + Eta[i] * theta + quad_form(Omega, Eta[i,]') + Z * zeta, sqrt(sigma2));
   }
 }
 

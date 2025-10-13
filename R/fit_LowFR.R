@@ -6,15 +6,15 @@
 #source("R/helper.R")
 #source("R/sim_data.R")
 
-#' Fit a Low-Rank Longintudinal Factor Regression Model
+#' Fit a Low-Rank Longitudinal Factor Regression Model
 #'
 #' @export
-#' @param X_obs Numeric matrix of exposures.
-#' @param y_obs Numeric vector of output values.
+#' @param X Numeric matrix of exposures.
+#' @param y Numeric vector of output values.
 #' @param ... Arguments passed to `rstan::sampling` (e.g. iter, chains).
 #' @return An object of class `stanfit` returned by `rstan::sampling`
 #'
-fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
+fit_LowFR <- function(y, X, Z, p, TT, k=NULL,
                       output="all",
                       burnin=1000, samples=1000, chains=4,
                       random_seed=1234) {
@@ -24,36 +24,77 @@ fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
   #       "alpha_0"
   #       "alpha"
   #       "Gamma"
+  #       "zeta"
   #       "sigma2"
   #       "Sigma"
   #       "phi"
   #       "tau"
-  #       "theta"
-  #       "Omega"
   # If "all" is specified, samples for the full list above will be returned as
   # a list of arrays.
 
   # detect n_obs
-  n_obs <- length(y_obs)
+  n_obs <- length(y)
+
+  # check for missing y or Z values
+  missing_y_or_Z <- FALSE
+  if (sum(is.na(y)) > 0) {
+    print("Please drop or impute missing y values before model fitting. LowFR is currently only able to impute missing X values.")
+    missing_y_or_Z <- TRUE
+  }
+  if (sum(is.na(Z)) > 0) {
+    print("Please drop or impute missing Z values before model fitting. LowFR is currently only able to impute missing X values.")
+    missing_y_or_Z <- TRUE
+  }
+  if (missing_y_or_Z) {
+    return(NULL)
+  }
+
+  # set up machinery for imputation if any missing X values
+  X_missing <- is.na(X)
+  num_missing <- sum(X_missing)
+  if (num_missing > 0) {
+    print(paste0(num_missing, " missing exposure values will be imputed during each posterior sample."))
+  }
+  # replace NAs with zeros so stan will accept it
+  X_replace_nas <- X
+  for (i in 1:nrow(X)) {
+    for (j in 1:ncol(X)) {
+      if (is.na(X[i,j])) {
+        X_replace_nas[i,j] = 0
+      }
+    }
+  }
+  # index missing values to match indices of imputation parameters
+  curr_index <- 1
+  for (i in 1:N) {
+    for (j in 1:(p*TT)) {
+      if (X_missing[i,j] > 0) {
+        X_missing[i,j] <- curr_index
+        curr_index <- curr_index + 1
+      }
+      else {
+        X_missing[i,j] <- 0
+      }
+    }
+  }
 
   # choose k using SVD if needed
   if (is.null(k)) {
-    k <- k_svd_LowFR(X_obs=X_obs, p=p, TT=TT)
+    k <- k_svd_LowFR(X=X, p=p, TT=TT)
   }
-
-  # compile stan model
-  # m <- stan_model("Stan/LowFR.stan")
 
   # fit model
   options(mc.cores = parallel::detectCores())
   fit <- sampling(stanmodels$LowFR,
                   list(N=n_obs,
                        p=p,
+                       q=ncol(Z),
                        k=k,
                        TT=TT,
                        H=min(p,TT),
-                       X=X_obs,
-                       y=y_obs),
+                       X=X,
+                       y=y,
+                       Z=Z),
                   chains=chains,
                   iter=burnin+samples,
                   warmup=burnin,
@@ -84,6 +125,11 @@ fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
     results <- c(results, list(post_samples$Gamma))
     result_names <- c(result_names, "Gamma")
   }
+  if ("zeta" %in% output | output == "all") {
+    #results <- append(results, post_samples$Gamma)
+    results <- c(results, list(post_samples$zeta))
+    result_names <- c(result_names, "zeta")
+  }
   if ("sigma2" %in% output | output == "all") {
     #results <- append(results, post_samples$sigma2)
     results <- c(results, list(post_samples$sigma2))
@@ -104,16 +150,6 @@ fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
     results <- c(results, list(post_samples$tau))
     result_names <- c(result_names, "tau")
   }
-  if ("theta" %in% output | output == "all") {
-    #results <- append(results, post_samples$theta)
-    results <- c(results, list(post_samples$theta))
-    result_names <- c(result_names, "theta")
-  }
-  if ("Omega" %in% output | output == "all") {
-    #results <- append(results, post_samples$Omega)
-    results <- c(results, list(post_samples$Omega))
-    result_names <- c(result_names, "Omega")
-  }
   names(results) <- result_names
   return(results)
 }
@@ -121,14 +157,14 @@ fit_LowFR <- function(y_obs, X_obs, p=10, k=NULL, TT=3,
 ###############################################################################
 ######################### Choose k based on SVD ###############################
 ###############################################################################
-k_svd_LowFR <- function(X_obs, p, TT) {
+k_svd_LowFR <- function(X, p, TT) {
   # create data matrix of x_it's to do SVD and determine number of factors
-  Xit_mat <- matrix(nrow=(TT*nrow(X_obs)), ncol=p)
+  Xit_mat <- matrix(nrow=(TT*nrow(X)), ncol=p)
 
   # loop over data to populate matrix
-  for (i in 1:nrow(X_obs)) {
+  for (i in 1:nrow(X)) {
     for (t in 1:TT) {
-      Xit_mat[(TT*(i-1) + t),] <- X_obs[i,seq(from=t, to=p*TT, by=TT)]
+      Xit_mat[(TT*(i-1) + t),] <- X[i,seq(from=t, to=p*TT, by=TT)]
     }
   }
 
