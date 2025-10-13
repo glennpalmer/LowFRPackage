@@ -9,10 +9,15 @@
 #' Fit a Low-Rank Longitudinal Factor Regression Model
 #'
 #' @export
-#' @param X Numeric matrix of exposures.
-#' @param y Numeric vector of output values.
-#' @param ... Arguments passed to `rstan::sampling` (e.g. iter, chains).
-#' @return An object of class `stanfit` returned by `rstan::sampling`
+#' @param y Numeric vector of outcome values
+#' @param X Numeric matrix of exposure values. Can include NAs for missing values.
+#' @param p Number of different exposures (e.g, chemicals) stored in X.
+#' @param TT Number of different measurement times stored in X
+#' @param Z (Optional) Numeric matrix of additional covariate values.
+#' @param k (Optional) Number of latent factors to use. (Will be estimated with SVD if not provided.)
+#'
+#' @return A list of arrays containing posterior samples.
+
 #'
 fit_LowFR <- function(y, X, p, TT, Z=NULL, k=NULL,
                       output="all",
@@ -171,7 +176,7 @@ k_svd_LowFR <- function(X, p, TT) {
   # loop over data to populate matrix
   for (i in 1:nrow(X)) {
     for (t in 1:TT) {
-      Xit_mat[(TT*(i-1) + t),] <- X[i,seq(from=t, to=p*TT, by=TT)]
+      Xit_mat[(TT*(i-1) + t),] <- as.vector(as.matrix(X)[i,seq(from=t, to=p*TT, by=TT)])
     }
   }
 

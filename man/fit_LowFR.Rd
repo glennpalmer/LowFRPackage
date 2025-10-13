@@ -19,14 +19,20 @@ fit_LowFR(
 )
 }
 \arguments{
-\item{y}{Numeric vector of output values.}
+\item{y}{Numeric vector of outcome values}
 
-\item{X}{Numeric matrix of exposures.}
+\item{X}{Numeric matrix of exposure values. Can include NAs for missing values.}
 
-\item{...}{Arguments passed to \code{rstan::sampling} (e.g. iter, chains).}
+\item{p}{Number of different exposures (e.g, chemicals) stored in X.}
+
+\item{TT}{Number of different measurement times stored in X}
+
+\item{Z}{(Optional) Numeric matrix of additional covariate values.}
+
+\item{k}{(Optional) Number of latent factors to use. (Will be estimated with SVD if not provided.)}
 }
 \value{
-An object of class \code{stanfit} returned by \code{rstan::sampling}
+A list of arrays containing posterior samples.
 }
 \description{
 Fit a Low-Rank Longitudinal Factor Regression Model
