@@ -96,7 +96,7 @@ fit_LowFR <- function(y, X, p, TT, Z=NULL, k=NULL,
   # fit model
   options(mc.cores = parallel::detectCores())
   fit <- sampling(stanmodels$LowFR,
-                  data=list(N=n_obs,
+                  list(N=n_obs,
                        p=p,
                        q=ncol(Z),
                        k=k,
@@ -111,7 +111,7 @@ fit_LowFR <- function(y, X, p, TT, Z=NULL, k=NULL,
                   iter=burnin+samples,
                   warmup=burnin,
                   seed=random_seed,
-                  init=0)
+                  init_r=1)
 
   # return the stan fit if specified as output
   if (output == "stan_fit") {

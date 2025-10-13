@@ -122,7 +122,7 @@ transformed parameters {
 
   // define X in terms of data and imputation parameters
   for (i in 1:N) {
-    for (j in 1:p*TT) {
+    for (j in 1:(p*TT)) {
       if (X_missing[i,j] > 0) {
         X[i,j] = X_imp[X_missing[i,j]];
       }
@@ -151,7 +151,9 @@ model {
   mu ~ normal(0, sqrt(10));
 
   // priors for covariate effects
-  zeta ~ normal(0, sqrt(10));
+  for (i in 1:q) {
+    zeta[i] ~ normal(0, sqrt(10));
+  }
 
   // beta and omega multiplicative gamma priors
   for (j in 1:k) {
@@ -211,9 +213,11 @@ model {
   for (i in 1:N) {
     X[i,] ~ multi_normal(Lambda_kron_I * to_vector(Eta[i,]), Sigma_kron_phi);
 
-    y[i] ~ normal(mu + Eta[i] * theta + quad_form(Omega, Eta[i,]') + Z * zeta, sqrt(sigma2));
+    y[i] ~ normal(mu + Eta[i] * theta + quad_form(Omega, Eta[i,]') + Z[i] * zeta,
+                  sqrt(sigma2));
   }
 }
+
 
 generated quantities {
   // generate the induced intercept, main effects, and interactions
@@ -239,4 +243,5 @@ generated quantities {
   alpha = A' * theta;
   Gamma = A' * Omega * A;
 }
+
 
