@@ -14,7 +14,7 @@
 #' @param ... Arguments passed to `rstan::sampling` (e.g. iter, chains).
 #' @return An object of class `stanfit` returned by `rstan::sampling`
 #'
-fit_LowFR <- function(y, X, Z, p, TT, k=NULL,
+fit_LowFR <- function(y, X, p, TT, Z=NULL, k=NULL,
                       output="all",
                       burnin=1000, samples=1000, chains=4,
                       random_seed=1234) {
@@ -47,6 +47,11 @@ fit_LowFR <- function(y, X, Z, p, TT, k=NULL,
   }
   if (missing_y_or_Z) {
     return(NULL)
+  }
+
+  # set Z to a width zero matrix if it's not provided by user
+  if (is.null(Z)) {
+    Z <- matrix(nrow=n_obs, ncol=0)
   }
 
   # set up machinery for imputation if any missing X values
@@ -86,14 +91,16 @@ fit_LowFR <- function(y, X, Z, p, TT, k=NULL,
   # fit model
   options(mc.cores = parallel::detectCores())
   fit <- sampling(stanmodels$LowFR,
-                  list(N=n_obs,
+                  data=list(N=n_obs,
                        p=p,
                        q=ncol(Z),
                        k=k,
                        TT=TT,
                        H=min(p,TT),
-                       X=X,
                        y=y,
+                       X_partial=X_replace_nas,
+                       X_missing=X_missing,
+                       num_missing=num_missing,
                        Z=Z),
                   chains=chains,
                   iter=burnin+samples,
@@ -167,6 +174,9 @@ k_svd_LowFR <- function(X, p, TT) {
       Xit_mat[(TT*(i-1) + t),] <- X[i,seq(from=t, to=p*TT, by=TT)]
     }
   }
+
+  # take complete case observations of Xit
+  Xit_mat <- Xit_mat[complete.cases(Xit_mat),]
 
   # do SVD to get singular values
   sing_vals <- svd(Xit_mat)$d

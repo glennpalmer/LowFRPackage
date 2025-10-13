@@ -1,6 +1,4 @@
 // Finalized model from "Low-rank longitudinal factor regression" paper
-// (This implementation does not include additional covariates and cannot
-// handle missing data.)
 
 functions{
   matrix kronecker(matrix A, matrix B) {
@@ -38,7 +36,9 @@ data {
   int<lower=0> TT;
   int<lower=0> H;
   vector[N] y; // outcome
-  matrix[N, p*TT] X; // observed longitudinal exposures
+  matrix[N, p*TT] X_partial; // observed longitudinal exposures
+  int<lower=0> X_missing[N, p*TT]; // indexed missing exposures
+  int<lower=0> num_missing; // number of missing exposures
   matrix[N, q] Z; // other covariates
 }
 
@@ -73,6 +73,9 @@ parameters {
   real<lower=0> tau_int;
   real<lower=0> xi_int[k*k+TT*TT];
   real<lower=0> a1_int;
+
+  // parameters for imputing missing X values
+  real X_imp[num_missing];
 }
 
 transformed parameters {
@@ -87,6 +90,9 @@ transformed parameters {
 
   // declare tau (for MGP)
   real<lower=0> tau[H];
+
+  // declare matrix X to be populated with observed data and imputed parameters
+  matrix[N, (p*TT)] X;
 
   // define theta in terms of beta and omega
   theta = to_vector(omega * beta');
@@ -112,6 +118,18 @@ transformed parameters {
   tau[1] = delta[1];
   for (l in 2:H) {
     tau[l] = tau[l-1] * delta[l];
+  }
+
+  // define X in terms of data and imputation parameters
+  for (i in 1:N) {
+    for (j in 1:p*TT) {
+      if (X_missing[i,j] > 0) {
+        X[i,j] = X_imp[X_missing[i,j]];
+      }
+      else {
+        X[i,j] = X_partial[i,j];
+      }
+    }
   }
 }
 

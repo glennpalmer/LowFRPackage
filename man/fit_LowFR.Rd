@@ -2,14 +2,15 @@
 % Please edit documentation in R/fit_LowFR.R
 \name{fit_LowFR}
 \alias{fit_LowFR}
-\title{Fit a Low-Rank Longintudinal Factor Regression Model}
+\title{Fit a Low-Rank Longitudinal Factor Regression Model}
 \usage{
 fit_LowFR(
-  y_obs,
-  X_obs,
-  p = 10,
+  y,
+  X,
+  p,
+  TT,
+  Z = NULL,
   k = NULL,
-  TT = 3,
   output = "all",
   burnin = 1000,
   samples = 1000,
@@ -18,9 +19,9 @@ fit_LowFR(
 )
 }
 \arguments{
-\item{y_obs}{Numeric vector of output values.}
+\item{y}{Numeric vector of output values.}
 
-\item{X_obs}{Numeric matrix of exposures.}
+\item{X}{Numeric matrix of exposures.}
 
 \item{...}{Arguments passed to \code{rstan::sampling} (e.g. iter, chains).}
 }
@@ -28,5 +29,5 @@ fit_LowFR(
 An object of class \code{stanfit} returned by \code{rstan::sampling}
 }
 \description{
-Fit a Low-Rank Longintudinal Factor Regression Model
+Fit a Low-Rank Longitudinal Factor Regression Model
 }
