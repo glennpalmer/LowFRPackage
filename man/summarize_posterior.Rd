@@ -9,9 +9,9 @@ summarize_posterior(samples, lower = 0.025, upper = 0.975)
 \arguments{
 \item{samples}{Vector of posterior samples of some quantity of interest}
 
-\item{lower}{Lower quantile value between 0 and 1}
+\item{lower}{(Optional) Lower quantile value between 0 and 1}
 
-\item{upper}{Upper quantile value between 0 and 1}
+\item{upper}{(Optional) Upper quantile value between 0 and 1}
 }
 \value{
 A list containing the mean and lower and upper quantiles (default 2.5th and 97.5th percentile, giving an equal-tailed 95\% interval)
