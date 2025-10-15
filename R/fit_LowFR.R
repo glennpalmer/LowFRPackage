@@ -1,10 +1,6 @@
 # Functions to fit and summarize LowFR models as described in "Low-Rank
 # Longitudinal Factor Regression" paper
 
-#library(tidyverse)
-#library(rstan)
-#source("R/helper.R")
-#source("R/sim_data.R")
 
 #' Fit a Low-Rank Longitudinal Factor Regression Model
 #'
