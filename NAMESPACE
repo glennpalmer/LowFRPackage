@@ -3,6 +3,7 @@
 export(compute_expected_diff)
 export(compute_expected_outcome)
 export(fit_LowFR)
+export(plot_main_effects)
 export(summarize_main_effects)
 export(summarize_posterior)
 import(Rcpp)
