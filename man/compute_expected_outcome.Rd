@@ -2,7 +2,7 @@
 % Please edit documentation in R/compute_expected_outcome.R
 \name{compute_expected_outcome}
 \alias{compute_expected_outcome}
-\title{Evaluate expected outcome given exposure values}
+\title{Evaluate expected outcome given exposure and covariate values}
 \usage{
 compute_expected_outcome(fit, x_obs, z_obs)
 }
@@ -17,5 +17,5 @@ compute_expected_outcome(fit, x_obs, z_obs)
 A vector of posterior samples of the expected outcome
 }
 \description{
-Evaluate expected outcome given exposure values
+Evaluate expected outcome given exposure and covariate values
 }

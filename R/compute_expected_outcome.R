@@ -1,6 +1,6 @@
 # Function to evaluate expected outcome for a given set of exposure values
 
-#' Evaluate expected outcome given exposure values
+#' Evaluate expected outcome given exposure and covariate values
 #'
 #' @export
 #' @param fit Model fit returned by fit_lowFR function with default setting "all"
