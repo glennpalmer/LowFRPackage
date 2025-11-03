@@ -12,4 +12,4 @@ To download and install the package, run the following code.
 install.packages("devtools")
 devtools::install_github("glennpalmer/LowFRPackage")
 ```
-Then, for a tutorial of how to fit and summarize a LowFR model, see the `demo_ELEMENT.html` file and/or the associated R markdown notebook.
+Then, for a tutorial of how to fit and summarize a LowFR model, see the `demo_ELEMENT.html` file (download it and open in your browser) and/or the associated R markdown notebook.
