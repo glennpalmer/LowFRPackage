@@ -1,0 +1,244 @@
+---
+title: "LowFR Demo with ELEMENT Data"
+author: "Glenn Palmer"
+date: "2025-10-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import packages
+
+```{r, message=FALSE, warning=FALSE}
+library(LowFRPackage)
+library(tidyverse)
+```
+
+## Import and clean data
+
+Low-rank longitudinal factor regression, or ``LowFR,'' is a regression method developed to relate a continuous outcome variable to levels of exposures to a mixture of $p$ chemicals (and/or other types of exposures) that are measured repeatedly $T$ times for each individual. It allows for time-varying effects of the exposures, as well as interactions both within and across times. To do this, it estimates the regression surface:
+
+$$ \mathbb{E}[y_i | x_i, z_i] = f(x_i) + \zeta^T z_i$$
+In the above expression, $y_i$ is the outcome of interest, $x_i$ is a vector of $p$ times $T$ exposure levels for patient $i$, and $z_i$ is a vector of $q$ additional covariates, which we assume have a linear relationship with the outcome. To allow for nonlinearity and interaction effects among all the exposure measurements, we treat $f$ as a quadratic function:
+
+$$ f(x_i) = \alpha_0 + \alpha^T x_i + x_i^T \Gamma x_i$$
+In this function, $\alpha_0$ is an intercept, $\alpha$ is a vector of linear coefficients, and $\Gamma$ is a matrix of quadratic and interaction effects.
+
+To demonstrate the type of analysis that can be done using LowFR, we apply it to data from the ELEMENT study, found at https://deepblue.lib.umich.edu/data/concern/data_sets/k3569479p. To run the analysis that follows, you should download the `Phthalate_Metabolites_and_Demographic_Covariates_Dataset.csv` and `StandardizedMetabolites572_share.csv` data sets from the link and store them in a directory called `data`.
+
+The analysis demonstrated in this notebook relates levels of 2-deoxy-D-glucose measured in adolescence to prenatal levels of exposure to BPA and each of nine phthalates, measured during each trimester of pregnancy, while also accounting for patient sex, age, age-corrected BMI z-score, and an indicator of puberty onset. It is very similar to the results generated for the paper ``Low-rank longitudinal factor regression with application to chemical mixtures,'' found at https://pmc.ncbi.nlm.nih.gov/articles/PMC12013532/.
+
+The code in this section imports and cleans the relevant data sets to produce:
+
+* $y \in \mathbb{R}^n$: a vector of outcomes for each patient (in this case, 2-DG levels), standardized to have mean 0 and variance 1.
+* $X \in \mathbb{R}^{n \times pT}$: A matrix of longitudinal exposures, with each column standardized to have mean 0 and variance 1. The columns should be ordered so that the $i\text{th}$ row of the $X$ is $x_i = (x_{i11}, ..., x_{i1T}, ...., x_{ip1}, ... , x_{ipT})$ where $x_{ijt}$ is the $j\text{th}$ exposure at measurement time $t$ for patient $i$. (See the processed $X$ matrix for an example of appropriate column ordering.)
+* $Z \in \mathbb{R}^{n \times q}$: A matrix of additional patient covariates.
+
+For this example, $p=10$, $T=3$, and $q=4$.
+
+```{r, message=FALSE, warning=FALSE}
+# import exposure data
+data <- read_csv("data/Phthalate_Metabolites_and_Demographic_Covariates_Dataset.csv")
+
+# import followup metabolite data
+data_all_metabolites <- read_csv("data/StandardizedMetabolites572_share.csv")
+```
+
+```{r}
+# attach outcome of interest to dataset
+data$twoDG <- data_all_metabolites$M73
+
+# remove patients with no observed exposure values
+data_cleaned <- data |>
+  filter(!if_all(c(10:42), ~ is.na(.)))
+
+# standardize all twoDG values
+data_cleaned$twoDG <- (data_cleaned$twoDG - mean(data_cleaned$twoDG)) / sd(data_cleaned$twoDG)
+
+# remove extreme outlier (-8.37 after standardizing)
+data_cleaned <- data_cleaned |>
+  filter(twoDG > -8)
+
+# restandardize outcome
+data_cleaned$twoDG <- (data_cleaned$twoDG - mean(data_cleaned$twoDG)) / sd(data_cleaned$twoDG)
+mean(data_cleaned$twoDG)
+sd(data_cleaned$twoDG)
+```
+
+```{r}
+# define y and X from the df
+y <- data_cleaned$twoDG
+X <- data_cleaned[,10:39]
+N <- nrow(X)
+p <- 10
+TT <- 3
+```
+
+```{r}
+# note missing values in X
+sum(is.na(X))
+```
+
+```{r}
+# standardize columns of X
+colmeans_exposures <- colMeans(X, na.rm=TRUE)
+for (i in 1:ncol(X)) {
+  X[,i] <- (X[,i] - colmeans_exposures[i]) / sd(as.numeric(unlist(X[,i])), na.rm=TRUE)
+}
+```
+
+```{r}
+# get relevant covariates
+sex <- data_cleaned$SEXO_H
+age <- data_cleaned$cd_age
+onset <- data_cleaned$onset
+bmi <- data_cleaned$X_ZBFA
+
+# create data frame Z defined by these values
+Z <- data.frame(sex, age, onset, bmi)
+```
+
+```{r}
+# standardize the age and BMI columns
+Z$age <- (Z$age - mean(Z$age)) / sd(Z$age)
+Z$bmi <- (Z$bmi - mean(Z$bmi)) / sd(Z$bmi)
+```
+
+Observing the cleaned data $y$, $X$, and $Z$, note that there are a number of missing observations in $X$. The LowFR model can handle these, automatically imputing values at each MCMC sample based on the joint distribution. However, the current implementation is not able to handle missingness in $y$ or $Z$.
+
+
+## Fit model
+
+Once the data is prepared, we can simply call the `fit_LowFR` function to compute posterior samples.
+
+```{r, warning=FALSE}
+fit <- fit_LowFR(y=y, X=X, p=10, TT=3, Z=Z)
+```
+
+The sampler may give some warnings about bulk ESS and/or tail ESS being `NA` or too low. (Here, ESS stands for Effective Sample Size, and is an indication of how well the MCMC sampler has converged.) This is likely not a concern -- there are a lot of additional parameters in the LowFR model specification that are not identifiable, and in general will always have poor convergence. Instead, you should evaluate convergence for the relevant identifiable parameters.
+
+The identifiable regression parameters are alpha_0, alpha, Gamma, and zeta in the regression equation:
+
+$$ \mathbb{E}[y_i | x_i, z_i] = \alpha_0 + \alpha^T x_i + x_i^T \Gamma x_i + \zeta^T z_i$$
+
+To evaluate convergence for these relevant parameters, you can examine some trace plots, showing the samples of each parameter over the course of posterior sampling. These should appear like independent random samples around a fixed average. (An ideal trace plot should look something like a ``hairy caterpillar'')
+
+The ones for this example look pretty good.
+
+```{r}
+# intercept
+plot(fit$alpha_0, type="l")
+
+# first index of alpha
+plot(fit$alpha[,1], type="l")
+```
+
+
+## Posterior summaries
+
+To start, we can examine the associations of the covariates in $Z$ with the outcome, after controlling for all the exposure levels. The `summarize_covariate_effects` function produces posterior means and upper and lower bounds for a $95\%$ credible interval.
+
+```{r}
+summarize_covariate_effects(fit=fit, varnames=colnames(Z))
+```
+
+We can do the same for the chemical effects as well. Here, we define a ``main effect'' as the expected change in outcome given a shift in a single exposure from -0.5 (half a standard deviation below average) to 0.5 (half a standard deviation above average) with all other exposures held constant at the mean of 0.
+
+```{r}
+main_df <- summarize_main_effects(fit=fit, varnames=colnames(X))
+main_df
+```
+
+To more easily summarize the effects, we can plot them.
+
+```{r}
+main_plot <- plot_main_effects(fit=fit, varnames=colnames(X))
+main_plot
+```
+
+Note that the plotting functions return `ggplot` objects. So you can easily edit the title, axes, or other visual elements.
+
+```{r}
+main_plot +
+  labs(title="New title")
+```
+
+## Computing cumulative effects
+
+Rather than looking at effects for each chemical at each time point separately, we can examine ``cumulative effects,'' which capture the expected change in outcome if a given chemical increases from -0.5 to 0.5 at all observed times, given constant values of 0 for all other chemicals.
+
+```{r}
+cumulative_df <- summarize_cumulative_effects(fit=fit,
+                                              varnames=c("BPA", "MBP", "MBzP",
+                                                         "MCPP", "MECPP", "MEHHP",
+                                                         "MEHP", "MEOHP", "MEP", "MIBP"))
+
+cumulative_df
+```
+
+Observe that the $95\%$ interval for the cumulative effect of MEP is strictly negative.
+
+```{r}
+cumulative_plot <- plot_cumulative_effects(fit=fit,
+                                           varnames=c("BPA", "MBP", "MBzP",
+                                                      "MCPP", "MECPP", "MEHHP",
+                                                      "MEHP", "MEOHP", "MEP", "MIBP"))
+
+cumulative_plot
+```
+
+## Computing general effects
+
+Finally, although the above functions make it simple to summarize some simple effects, you can also compute the expected change in outcome for a particular change from exposure levels $x_1$ to $x_2$. One way this might be useful is to evaluate joint effects of related chemicals.
+
+For example, note in the above cumulative effects plot that the intervals for MBP and MCPP are both mostly negative, but include 0. MBP and MCPP are the two metabolites of the phthalate DBP, which is more likely to actually be encounterd in the environment. So, MBP and MCPP are likely to vary together. Thus, it could make sense to evaluate the expected change in outcome if both MBP and MCPP increase from -0.5 to 0.5 at all times. MBP is the second chemical, so is captured by indices 4-6 of $x_i$, while MCPP is the fourth chemical, captured by indices 10-12. Thus, we can compute this expected change as follows.
+
+
+```{r}
+DBP_diff <- compute_expected_diff(fit=fit,
+                                  x1=c(0,0,0,
+                                       -0.5, -0.5, -0.5,
+                                       0,0,0,
+                                       -0.5,-0.5,-0.5,
+                                       rep(0, 18)),
+                                  x2=c(0,0,0,
+                                       0.5, 0.5, 0.5,
+                                       0,0,0,
+                                       0.5,0.5,0.5,
+                                       rep(0, 18)))
+```
+
+The `compute_expected_diff` function returns posterior samples for the expected change in outcome. We can examine these directly.
+
+```{r}
+plot(DBP_diff, type="l")
+```
+
+Or, likely of more interest, we can summarize the posterior mean and $95\%$ credible interval.
+
+```{r}
+summarize_posterior(DBP_diff)
+```
+
+
+## Heatmaps for pairs of times
+
+Given the finding of a cumulative effect, it also may be of interest to examine effects at pairs of times. That could be done similar to above by varying the indices used in the `compute_expected_diff` function. But we have also implemented a function to plot a heatmap of expected change in outcome as a group of chemicals vary at two observation times. All values are shown relative to a mean exposure of 0 for each chemical, and any regions where the $95\%$ posterior interval includes zero are set to 0.
+
+Here, we demonstrate this function for the DBP metabolites at trimesters 1 and 2.
+
+```{r}
+plot_heatmap(fit=fit, chems=c(2,4), t1=1, t2=2)
+```
+
+
+
+
+
+
+
+
+
+
