@@ -17,6 +17,7 @@
 #'
 fit_LowFR <- function(y, X, p, TT, Z=NULL, k=NULL,
                       output="all",
+                      preestimate_Lambda=FALSE,
                       burnin=1000, samples=1000, chains=4,
                       random_seed=1234) {
 
@@ -89,29 +90,84 @@ fit_LowFR <- function(y, X, p, TT, Z=NULL, k=NULL,
     k <- k_svd_LowFR(X=X, p=p, TT=TT)
   }
 
-  # fit model
-  options(mc.cores = parallel::detectCores())
-  fit <- sampling(stanmodels$LowFR,
-                  list(N=n_obs,
-                       p=p,
-                       q=ncol(Z),
-                       k=k,
-                       TT=TT,
-                       H=min(p,TT),
-                       y=y,
-                       X_partial=X_replace_nas,
-                       X_missing=X_missing,
-                       num_missing=num_missing,
-                       Z=Z),
-                  chains=chains,
-                  iter=burnin+samples,
-                  warmup=burnin,
-                  seed=random_seed,
-                  init_r=1)
+  # fit pre-estimated model if specified
+  if (preestimate_Lambda) {
+    # create data matrix of x_it's to do SVD
+    Xit_mat <- matrix(nrow=(TT*nrow(X)), ncol=p)
 
-  # return the stan fit if specified as output
-  if (output == "stan_fit") {
-    return(fit)
+    # loop over data to populate matrix
+    for (i in 1:nrow(X)) {
+      for (t in 1:TT) {
+        Xit_mat[(TT*(i-1) + t),] <- as.vector(as.matrix(X)[i,seq(from=t, to=p*TT, by=TT)])
+      }
+    }
+
+    # take complete case observations of Xit
+    Xit_mat <- Xit_mat[complete.cases(Xit_mat),]
+
+    # find SVD
+    Xit_svd <- svd(Xit_mat)
+
+    # compute estimated Lambda
+    Lambda_pre <- Xit_svd$v[,1:k] %*% diag(Xit_svd$d[1:k]) / sqrt(nrow(Xit_mat)-1)
+
+    # print out the pre-estimated Lambda
+    print("Pre-estimated loadings matrix Lambda:")
+    print(Lambda_pre)
+
+
+    options(mc.cores = parallel::detectCores())
+    fit <- sampling(stanmodels$LowFR_preestimate_Lambda,
+                    list(N=n_obs,
+                         p=p,
+                         q=ncol(Z),
+                         k=k,
+                         TT=TT,
+                         H=min(p,TT),
+                         y=y,
+                         X_partial=X_replace_nas,
+                         X_missing=X_missing,
+                         num_missing=num_missing,
+                         Z=Z,
+                         Lambda=Lambda_pre),
+                    chains=chains,
+                    iter=burnin+samples,
+                    warmup=burnin,
+                    seed=random_seed,
+                    init_r=1)
+
+    # return the stan fit if specified as output
+    if (output == "stan_fit") {
+      return(fit)
+    }
+}
+
+
+  # otherwise, fit full model
+  else {
+    options(mc.cores = parallel::detectCores())
+    fit <- sampling(stanmodels$LowFR,
+                    list(N=n_obs,
+                         p=p,
+                         q=ncol(Z),
+                         k=k,
+                         TT=TT,
+                         H=min(p,TT),
+                         y=y,
+                         X_partial=X_replace_nas,
+                         X_missing=X_missing,
+                         num_missing=num_missing,
+                         Z=Z),
+                    chains=chains,
+                    iter=burnin+samples,
+                    warmup=burnin,
+                    seed=random_seed,
+                    init_r=1)
+
+    # return the stan fit if specified as output
+    if (output == "stan_fit") {
+      return(fit)
+    }
   }
 
   # otherwise, extract posterior samples and return list of specified parameters

@@ -12,6 +12,7 @@ fit_LowFR(
   Z = NULL,
   k = NULL,
   output = "all",
+  preestimate_Lambda = FALSE,
   burnin = 1000,
   samples = 1000,
   chains = 4,
