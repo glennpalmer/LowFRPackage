@@ -111,7 +111,8 @@ Observing the cleaned data $y$, $X$, and $Z$, note that there are a number of mi
 
 ## Fit model
 
-Once the data is prepared, we can simply call the `fit_LowFR` function to compute posterior samples.
+Once the data is prepared, we can simply call the `fit_LowFR` function to compute posterior samples. For this example, the posterior sampling takes about an hour and a half on a 2021 MacBook Pro. If you'd like to see some results more quickly, there are a couple of options described at the end of this document.
+
 
 ```{r, warning=FALSE}
 fit <- fit_LowFR(y=y, X=X, p=10, TT=3, Z=Z)
@@ -234,7 +235,24 @@ plot_heatmap(fit=fit, chems=c(2,4), t1=1, t2=2)
 ```
 
 
+## Options to speed up model fitting
 
+First, you could decrease the number of iterations. The default is to run four separate ``chains,'' (basically, just doing posterior sampling four separate times with different random initializations to make sure they all converge to the same distribution) each for 1000 warmup or "burn-in" iterations and then 1000 subsequent posterior samples, so that the total number of samples used to summarize the model is 4000 (combining the 1000 post burn-in samples from each chain). You could decrease the number of chains, the number of burn-in iterations, or the number of subsequent samples -- an example doing all three is shown below, commented out. However, in general you should be careful about reducing the number of samples too much, as more samples generally translates to more confidence that your results are accurate.
+
+```{r}
+# model fitting with half the default number of chains and samples
+
+# fit2 <- fit_LowFR(y=y, X=X, p=10, TT=3, Z=Z, chains=2, burnin=500, samples=500)
+```
+
+
+Alternately, you can specify `preestimate_Lambda=TRUE`. This uses a singular value decomposition to approximate some of the parameters in the model (specifically, the loadings matrix, $\Lambda$). This reduces the number of parameters the model needs to sample, which speeds things up significantly. The tradeoff is that since we're ignoring the posterior uncertainty in some of the parameters, the accuracy of the results may be affected.
+
+```{r}
+# model fitting using pre-estimated Lambda
+
+# fit3 <- fit_LowFR(y=y, X=X, p=10, TT=3, Z=Z, preestimate_Lambda=TRUE)
+```
 
 
 
